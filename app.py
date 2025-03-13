@@ -16,7 +16,7 @@ def create_app(config_class=Config):
     # Initialize extensions
     db.init_app(app)
     jwt = JWTManager(app)
-    CORS(app)
+    CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins
     migrate = Migrate(app, db)
     
     # Initialize API documentation
