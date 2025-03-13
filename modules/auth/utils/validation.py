@@ -5,29 +5,103 @@ This module contains functions for validating user input data.
 
 import re
 from typing import Dict, List, Tuple, Optional, Dict, Any
+from email_validator import validate_email, EmailNotValidError
 
-def validate_email(email: str) -> Tuple[bool, Optional[Dict[str, str]]]:
-    """Validate email format."""
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_pattern, email):
-        return False, {'email': 'Invalid email format'}
+def validate_email_format(email):
+    try:
+        validate_email(email)
+        return True, None
+    except EmailNotValidError as e:
+        return False, str(e)
+
+def validate_password(password):
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
     return True, None
 
-def validate_password(password: str) -> Tuple[bool, Optional[Dict[str, str]]]:
-    """Validate password strength."""
-    errors = {}
-    if len(password) < 8:
-        errors['password'] = 'Password must be at least 8 characters long'
-    if not re.search(r'[A-Z]', password):
-        errors['password'] = 'Password must contain at least one uppercase letter'
-    if not re.search(r'[a-z]', password):
-        errors['password'] = 'Password must contain at least one lowercase letter'
-    if not re.search(r'\d', password):
-        errors['password'] = 'Password must contain at least one number'
-    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
-        errors['password'] = 'Password must contain at least one special character'
+def validate_phone(phone):
+    if not phone:
+        return True, None
+    pattern = r'^\+?[1-9]\d{1,14}$'
+    if not re.match(pattern, phone):
+        return False, "Invalid phone number format"
+    return True, None
+
+def validate_register_data(data):
+    required_fields = ['email', 'password', 'full_name']
+    missing_fields = [field for field in required_fields if field not in data]
+    field_errors = {}
     
-    return len(errors) == 0, errors if errors else None
+    if missing_fields:
+        return False, {}, missing_fields
+    
+    # Validate email
+    is_valid, error = validate_email_format(data['email'])
+    if not is_valid:
+        field_errors['email'] = error
+    
+    # Validate password
+    is_valid, error = validate_password(data['password'])
+    if not is_valid:
+        field_errors['password'] = error
+    
+    # Validate phone if provided
+    if 'phone' in data:
+        is_valid, error = validate_phone(data['phone'])
+        if not is_valid:
+            field_errors['phone'] = error
+    
+    # Validate role if provided
+    if 'role' in data and data['role'] not in ['admin', 'client']:
+        field_errors['role'] = "Role must be either 'admin' or 'client'"
+    
+    return not bool(field_errors), field_errors, []
+
+def validate_login_data(data):
+    required_fields = ['email', 'password']
+    missing_fields = [field for field in required_fields if field not in data]
+    field_errors = {}
+    
+    if missing_fields:
+        return False, {}, missing_fields
+    
+    # Validate email
+    is_valid, error = validate_email_format(data['email'])
+    if not is_valid:
+        field_errors['email'] = error
+    
+    return not bool(field_errors), field_errors, []
+
+def validate_user_data(data, is_update=False, is_profile=False):
+    field_errors = {}
+    
+    if not is_update:
+        # For new user creation
+        required_fields = ['email', 'password', 'full_name']
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return False, {}, missing_fields
+    
+    if 'email' in data:
+        is_valid, error = validate_email_format(data['email'])
+        if not is_valid:
+            field_errors['email'] = error
+    
+    if 'password' in data:
+        is_valid, error = validate_password(data['password'])
+        if not is_valid:
+            field_errors['password'] = error
+    
+    if 'phone' in data:
+        is_valid, error = validate_phone(data['phone'])
+        if not is_valid:
+            field_errors['phone'] = error
+    
+    if 'role' in data and not is_profile:  # Don't allow role changes in profile updates
+        if data['role'] not in ['admin', 'client']:
+            field_errors['role'] = "Role must be either 'admin' or 'client'"
+    
+    return not bool(field_errors), field_errors, []
 
 def validate_full_name(full_name: str) -> Tuple[bool, Optional[Dict[str, str]]]:
     """Validate full name."""
@@ -41,16 +115,6 @@ def validate_full_name(full_name: str) -> Tuple[bool, Optional[Dict[str, str]]]:
     
     return len(errors) == 0, errors if errors else None
 
-def validate_phone(phone: Optional[str]) -> Tuple[bool, Optional[Dict[str, str]]]:
-    """Validate phone number format if provided."""
-    if not phone:
-        return True, None
-        
-    phone_pattern = r'^\+?[1-9]\d{1,14}$'
-    if not re.match(phone_pattern, phone):
-        return False, {'phone': 'Invalid phone number format'}
-    return True, None
-
 def validate_role(role: Optional[str]) -> Tuple[bool, Optional[Dict[str, str]]]:
     """Validate role if provided."""
     if not role:
@@ -60,56 +124,6 @@ def validate_role(role: Optional[str]) -> Tuple[bool, Optional[Dict[str, str]]]:
     if role not in valid_roles:
         return False, {'role': f'Invalid role. Must be one of: {", ".join(valid_roles)}'}
     return True, None
-
-def validate_register_data(data: Dict) -> Tuple[bool, Optional[Dict[str, Any]], Optional[List[str]]]:
-    """
-    Validate all registration data.
-    Returns:
-        Tuple[bool, Optional[Dict[str, Any]], Optional[List[str]]]: 
-            - Success status
-            - Field-specific errors if any
-            - List of missing fields if any
-    """
-    errors = {}
-    missing_fields = []
-    
-    # Check required fields
-    required_fields = ['email', 'password', 'full_name']
-    for field in required_fields:
-        if field not in data:
-            missing_fields.append(field)
-    
-    if missing_fields:
-        return False, {'missing_fields': missing_fields}, missing_fields
-    
-    # Validate email
-    is_valid, email_errors = validate_email(data['email'])
-    if not is_valid:
-        errors.update(email_errors)
-    
-    # Validate password
-    is_valid, password_errors = validate_password(data['password'])
-    if not is_valid:
-        errors.update(password_errors)
-    
-    # Validate full name
-    is_valid, name_errors = validate_full_name(data['full_name'])
-    if not is_valid:
-        errors.update(name_errors)
-    
-    # Validate phone if provided
-    if 'phone' in data and data['phone']:
-        is_valid, phone_errors = validate_phone(data['phone'])
-        if not is_valid:
-            errors.update(phone_errors)
-    
-    # Validate role if provided
-    if 'role' in data and data['role']:
-        is_valid, role_errors = validate_role(data['role'])
-        if not is_valid:
-            errors.update(role_errors)
-    
-    return len(errors) == 0, errors if errors else None, None
 
 def validate_login_data(data: dict) -> Tuple[bool, Dict[str, str], List[str]]:
     """Validate login data.

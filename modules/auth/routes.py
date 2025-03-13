@@ -375,3 +375,98 @@ class RevokeAllSessions(Resource):
         
         return format_success_response(None, 'All other sessions deleted successfully')
 
+@auth_ns.route('/users/me')
+class UserProfile(Resource):
+    @auth_ns.doc('get_user_profile', security='Bearer')
+    @auth_ns.response(200, 'User profile retrieved successfully', user_model)
+    @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model)
+    def get(self):
+        """Get the current user's profile"""
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return format_error_response({
+                'error': 'Missing or invalid authorization header',
+                'error_type': 'unauthorized',
+            }, 401)
+        
+        access_token = auth_header.split(' ')[1]
+        payload = verify_token(access_token)
+        if not payload:
+            return format_error_response({
+                'error': "Session has Expired",
+                'error_type': 'expired',
+            }, 401)
+        
+        user = User.query.get(payload['user_id'])
+        if not user:
+            return format_error_response({
+                'error': 'User not found',
+                'error_type': 'not_found',
+            }, 404)
+        
+        return format_success_response({
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
+                'full_name': user.full_name,
+                'role': user.role
+            }
+        }, 'User profile retrieved successfully')
+
+@auth_ns.route('/users/me', methods=['PUT'])
+class UpdateUserProfile(Resource):
+    @auth_ns.doc('update_user_profile', security='Bearer')
+    @auth_ns.response(200, 'User profile updated successfully', user_model)
+    @auth_ns.response(400, 'Validation error', register_validation_error_model)
+    @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model)
+    def put(self):
+        """Update the current user's profile"""
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return format_error_response({
+                'error': 'Missing or invalid authorization header',
+                'error_type': 'unauthorized',
+            }, 401)
+        
+        access_token = auth_header.split(' ')[1]
+        payload = verify_token(access_token)
+        if not payload:
+            return format_error_response({
+                'error': 'Session has expired',
+                'error_type': 'expired',
+            }, 401)
+        
+        user = User.query.get(payload['user_id'])
+        if not user:
+            return format_error_response({
+                'error': 'User not found',
+                'error_type': 'not_found',
+            }, 404)
+        
+        data = request.get_json()
+        
+        # Update user profile
+        user.full_name = data['full_name']
+        user.phone = data.get('phone')
+        
+        try:
+            db.session.commit()
+            
+            return format_success_response({
+                'user': {
+                    'id': str(user.id),
+                    'email': user.email,
+                    'full_name': user.full_name,
+                    'role': user.role
+                }
+            }, 'User profile updated successfully')
+            
+        except Exception as e:
+            db.session.rollback()
+            return format_error_response({
+                'error': f'Failed to update user profile: {str(e)}',
+                'details': {'server': 'An unexpected error occurred. Please try again later.'},
+                'missing_fields': [],
+                'error_type': 'server'
+            }, 500)
+

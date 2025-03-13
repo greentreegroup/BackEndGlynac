@@ -363,7 +363,6 @@ session_delete_success_model = api.model('SessionDeleteSuccess', {
         example=None
     )
 })
-
 session_error_model = api.model('SessionError', {
     'error': fields.String(
         required=True,
@@ -400,3 +399,299 @@ session_not_found_model = api.model('SessionNotFoundError', {
     ),
 
 })
+
+profile_update_model = api.model('ProfileUpdate', {
+    'full_name': fields.String(
+        required=False,
+        description='User full name',
+        example='John Doe',
+        min_length=2,
+        max_length=100
+    ),
+    'phone': fields.String(
+        required=False,
+        description='User phone number',
+        example='+1234567890',
+        pattern=r'^\+?[1-9]\d{1,14}$'
+    ),
+})
+
+# User list response models
+user_list_success_model = api.model('UserListSuccess', {
+    'message': fields.String(
+        required=True,
+        description='Success message',
+        example='Users retrieved successfully'
+    ),
+    'data': fields.Nested(
+        api.model('UserListData', {
+            'users': fields.List(
+                fields.Nested(
+                    api.model('UserListItem', {
+                        'id': fields.String(
+                            required=True,
+                            description='User identifier',
+                            example='550e8400-e29b-41d4-a716-446655440000'
+                        ),
+                        'email': fields.String(
+                            required=True,
+                            description='User email address',
+                            example='user@example.com'
+                        ),
+                        'full_name': fields.String(
+                            required=True,
+                            description='User full name',
+                            example='John Doe'
+                        ),
+                        'phone': fields.String(
+                            description='User phone number',
+                            example='+1234567890'
+                        ),
+                        'role': fields.String(
+                            required=True,
+                            description='User role',
+                            example='user',
+                            enum=['user', 'admin', 'moderator']
+                        ),
+                        'created_at': fields.DateTime(
+                            description='Account creation timestamp',
+                            example='2024-03-13T10:00:00Z'
+                        ),
+                        'last_sign_in_at': fields.DateTime(
+                            description='Last sign in timestamp',
+                            example='2024-03-13T10:00:00Z'
+                        )
+                    })
+                ),
+                description='List of users'
+            )
+        })
+    )
+})
+
+user_unauthorized_model = api.model('UserUnauthorized', {
+    'error': fields.String(
+        required=True,
+        description='Error message',
+        example='Missing or invalid authorization header'
+    ),
+    'error_type': fields.String(
+        required=True,
+        description='Type of error',
+        example='unauthorized',
+        enum=['unauthorized', 'expired']
+    )
+})
+
+user_forbidden_model = api.model('UserForbidden', {
+    'error': fields.String(
+        required=True,
+        description='Error message',
+        example='You do not have permission to perform this action'
+    ),
+    'error_type': fields.String(
+        required=True,
+        description='Type of error',
+        example='forbidden'
+    )
+})
+
+# User success response model
+user_success_model = api.model('UserSuccess', {
+    'message': fields.String(
+        required=True,
+        description='Success message',
+        example='User updated successfully'
+    ),
+    'data': fields.Nested(
+        api.model('UserData', {
+            'user': fields.Nested(
+                api.model('UserDetails', {
+                    'id': fields.String(
+                        required=True,
+                        description='User identifier',
+                        example='550e8400-e29b-41d4-a716-446655440000'
+                    ),
+                    'email': fields.String(
+                        required=True,
+                        description='User email address',
+                        example='user@example.com'
+                    ),
+                    'full_name': fields.String(
+                        required=True,
+                        description='User full name',
+                        example='John Doe'
+                    ),
+                    'phone': fields.String(
+                        description='User phone number',
+                        example='+1234567890'
+                    ),
+                    'role': fields.String(
+                        required=True,
+                        description='User role',
+                        example='user',
+                        enum=['user', 'admin', 'moderator']
+                    ),
+                    'updated_at': fields.DateTime(
+                        description='Last update timestamp',
+                        example='2024-03-13T10:00:00Z'
+                    )
+                })
+            )
+        })
+    )
+})
+
+# User validation error model
+user_validation_error_model = api.model('UserValidationError', {
+    'error': fields.String(
+        required=True,
+        description='Main error message',
+        example='Validation failed'
+    ),
+    'details': fields.Raw(
+        required=True,
+        description='Field-specific validation errors',
+        example={
+            'email': 'Invalid email format',
+            'full_name': 'Full name must be between 2 and 100 characters',
+            'phone': 'Invalid phone number format',
+            'role': 'Invalid role. Must be one of: user, admin, moderator'
+        }
+    ),
+    'missing_fields': fields.List(
+        fields.String,
+        description='List of required fields that are missing',
+        example=['email', 'full_name']
+    )
+})
+
+# User not found error model
+user_not_found_model = api.model('UserNotFound', {
+    'error': fields.String(
+        required=True,
+        description='Error message',
+        example='User not found'
+    ),
+    'error_type': fields.String(
+        required=True,
+        description='Type of error',
+        example='not_found'
+    )
+})
+
+
+user_create_model = api.model('UserCreate', {
+    'email': fields.String(
+        required=True,
+        description='User email address',
+        example='user@example.com',
+        pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ),
+    'password': fields.String(
+        required=True,
+        description='User password (min 8 characters)',
+        example='SecureP@ss123',
+        min_length=8
+    ),
+    'full_name': fields.String(
+        required=True,
+        description='User full name',
+        example='John Doe',
+        min_length=2,
+        max_length=100
+    ),
+    'phone': fields.String(
+        required=False,
+        description='User phone number',
+        example='+1234567890',
+        pattern=r'^\+?[1-9]\d{1,14}$'
+    ),
+    'role': fields.String(
+        required=False,
+        description='User role',
+        example='CLIENT',
+        enum=['CLIENT', 'ADMIN'],
+        default='CLIENT'
+    )
+})
+
+user_update_model = api.model('UserUpdate', {
+    'full_name': fields.String(
+        required=False,
+        description='User full name',
+        example='John Doe'
+    ),
+    'phone': fields.String(
+        required=False,
+        description='User phone number',
+        example='+1234567890'
+    ),
+    'role': fields.String(
+        required=False,
+        description='User role',
+        example='user',
+        enum=['CLIENT', 'ADMIN']
+    ),
+})
+
+session_list_success_model = api.model('SessionListSuccess', {
+    'message': fields.String(
+        required=True,
+        description='Success message',
+        example='Sessions retrieved successfully'
+    ),
+    'data': fields.Nested(
+        api.model('SessionListData', {
+            'sessions': fields.List(
+                fields.Nested(
+                    api.model('SessionListItem', {
+                        'id': fields.String(
+                            required=True,
+                            description='Session identifier',
+                            example='550e8400-e29b-41d4-a716-446655440000'
+                        ),
+                        'ip_address': fields.String(
+                            required=True,
+                            description='Client IP address',
+                            example='192.168.1.1'
+                        ),
+                        'user_agent': fields.String(
+                            required=True,
+                            description='Client browser info',
+                            example='Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+                        ),
+                        'location': fields.String(
+                            description='Geographic location',
+                            example='New York, US'
+                        ),
+                        'created_at': fields.DateTime(
+                            required=True,
+                            description='Session creation time',
+                            example='2024-03-13T10:00:00Z'
+                        ),
+                        'expires_at': fields.DateTime(
+                            required=True,
+                            description='Session expiration time',
+                            example='2024-03-13T11:00:00Z'
+                        )
+                    })
+                ),
+                description='List of active sessions'
+            )
+        })
+    )
+})
+
+session_forbidden_model = api.model('SessionForbidden', {
+    'error': fields.String(
+        required=True,
+        description='Error message',
+        example='You do not have permission to access this session'
+    ),
+    'error_type': fields.String(
+        required=True,
+        description='Type of error',
+        example='forbidden'
+    )
+})  
