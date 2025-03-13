@@ -18,7 +18,8 @@ from .docs.models import (
     register_success_model, register_validation_error_model, register_exists_error_model,
     refresh_token_success_model, refresh_token_error_model,
     logout_success_model, logout_error_model,
-    sessions_success_model, session_delete_success_model, session_error_model
+    sessions_success_model, session_delete_success_model,
+    session_unauthorized_model, session_not_found_model,
 )
 from .models import User, Auth, AuthAttempts, FailedLogin, Session
 from .helpers import (
@@ -276,17 +277,23 @@ class Logout(Resource):
 class Sessions(Resource):
     @auth_ns.doc('get_sessions', security='Bearer')
     @auth_ns.response(200, 'Sessions retrieved successfully', sessions_success_model)
-    @auth_ns.response(401, 'Unauthorized', session_error_model)
+    @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model )
     def get(self):
         """Get all active sessions for the current user"""
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
-            return format_error_response('Missing or invalid authorization header', 401)
+            return format_error_response({
+                'error': 'Missing or invalid authorization header',
+                'error_type': 'unauthorized',
+            }, 401)
         
         access_token = auth_header.split(' ')[1]
         payload = verify_token(access_token)
         if not payload:
-            return format_error_response('Invalid or expired access token', 401)
+            return format_error_response({
+                'error': "Session has Expired",
+                'error_type': 'expired',
+            }, 401)
         
         sessions = get_active_sessions(payload['user_id'])
         
@@ -306,26 +313,37 @@ class Sessions(Resource):
 class Session(Resource):
     @auth_ns.doc('delete_session', security='Bearer')
     @auth_ns.response(200, 'Session deleted successfully', session_delete_success_model)
-    @auth_ns.response(401, 'Unauthorized', session_error_model)
-    @auth_ns.response(403, 'Forbidden', session_error_model)
-    @auth_ns.response(404, 'Session not found', session_error_model)
+    @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model)
+    @auth_ns.response(404, 'Session not found', session_not_found_model)
     def delete(self, session_id):
         """Delete a specific session"""
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
-            return format_error_response('Missing or invalid authorization header', 401)
+            return format_error_response({
+                'error': 'Missing or invalid authorization header',
+                'error_type': 'unauthorized',
+            }, 401)
         
         access_token = auth_header.split(' ')[1]
         payload = verify_token(access_token)
         if not payload:
-            return format_error_response('Invalid or expired access token', 401)
+            return format_error_response({
+                'error': 'Session has expired',
+                'error_type': 'expired',
+            }, 401)
         
         session = Session.query.get(session_id)
         if not session:
-            return format_error_response('Session not found', 404)
+            return format_error_response({
+                'error': 'Session not found',
+                'error_type': 'not_found',
+            }, 404)
         
         if session.user_id != payload['user_id']:
-            return format_error_response('Unauthorized', 403)
+            return format_error_response({
+                'error': 'You do not have permission to perform this action',
+                'error_type': 'forbidden',
+            }, 403)
         
         invalidate_session(session)
         
@@ -335,17 +353,23 @@ class Session(Resource):
 class RevokeAllSessions(Resource):
     @auth_ns.doc('revoke_all_sessions', security='Bearer')
     @auth_ns.response(200, 'All other sessions deleted successfully', session_delete_success_model)
-    @auth_ns.response(401, 'Unauthorized', session_error_model)
+    @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model)
     def post(self):
         """Delete all sessions for the current user except the current one"""
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
-            return format_error_response('Missing or invalid authorization header', 401)
+            return format_error_response({
+                'error': 'Missing or invalid authorization header',
+                'error_type': 'unauthorized',
+            }, 401)
         
         access_token = auth_header.split(' ')[1]
         payload = verify_token(access_token)
         if not payload:
-            return format_error_response('Invalid or expired access token', 401)
+            return format_error_response({
+                'error': 'Session has expired',
+                'error_type': 'expired',
+            }, 401)
         
         revoke_all_sessions_except_current(payload['user_id'], access_token)
         

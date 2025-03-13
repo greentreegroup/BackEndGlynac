@@ -370,4 +370,33 @@ session_error_model = api.model('SessionError', {
         description='Error message',
         example='Missing or invalid authorization header'
     )
-}) 
+})
+
+# Session error models
+session_unauthorized_model = api.model('SessionUnauthorizedError', {
+    'error': fields.String(
+        required=True,
+        description='Error message',
+        example='Missing or invalid authorization header or session has expired'
+    ),
+    'error_type': fields.String(
+        required=True,
+        description='Type of error',
+        example='unauthorized or expired'
+    ),
+})
+
+
+session_not_found_model = api.model('SessionNotFoundError', {
+    'error': fields.String(
+        required=True,
+        description='Error message',
+        example='Session not found'
+    ),
+    'error_type': fields.String(
+        required=True,
+        description='Type of error',
+        example='not_found'
+    ),
+
+})
