@@ -42,9 +42,29 @@ def verify_token(token: str) -> Dict[str, Any]:
     except jwt.InvalidTokenError:
         return None
 
-def format_error_response(message: str, status_code: int = 400) -> tuple:
-    """Format an error response."""
-    return {'error': message}, status_code
+def format_error_response(message: str | dict, status_code: int = 400) -> tuple:
+    """Format an error response.
+    
+    Args:
+        message: Either a string error message or a dictionary containing:
+            - error: Main error message
+            - details: Field-specific validation errors (optional)
+            - missing_fields: List of missing required fields (optional)
+        status_code: HTTP status code (default: 400)
+    
+    Returns:
+        tuple: (response_dict, status_code)
+    """
+    if isinstance(message, dict):
+        error_response = message
+    else:
+        error_response = {
+            'error': message,
+            'details': {},
+            'missing_fields': []
+        }
+    
+    return error_response, status_code
 
 def format_success_response(data: Any, message: str = "Success") -> tuple:
     """Format a success response."""

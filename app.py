@@ -5,7 +5,8 @@ from flask_migrate import Migrate
 from modules.common.config import Config
 from modules.common.database import db
 from modules.auth import auth_bp
-from datetime import datetime
+from modules.common.docs import api
+from datetime import datetime, UTC
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -17,6 +18,9 @@ def create_app(config_class=Config):
     CORS(app)
     migrate = Migrate(app, db)
     
+    # Initialize API documentation
+    api.init_app(app)
+    
     # Register blueprints
     app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
     
@@ -26,7 +30,7 @@ def create_app(config_class=Config):
         return jsonify({
             'status': 'success',
             'message': 'Server is running',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(UTC).isoformat()
         }), 200
     
     # Create database tables
