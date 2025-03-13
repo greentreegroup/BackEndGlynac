@@ -19,7 +19,7 @@ api = Api(
             'description': 'Type in the *\'Value\'* input box below: **\'Bearer &lt;JWT&gt;\'**, where JWT is the token'
         }
     },
-    prefix='/api/v1'
+    prefix='/api'
 )
 
 # Define namespaces
