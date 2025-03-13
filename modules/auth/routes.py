@@ -121,7 +121,7 @@ class Login(Resource):
     @auth_ns.response(401, 'Invalid credentials', login_invalid_credentials_model)
     @auth_ns.response(429, 'Too many attempts', login_too_many_attempts_model)
     def post(self):
-        """Authenticate a user and create a new session"""
+        """Authenticate a user"""
         data = request.get_json()
         
         # Validate login data
@@ -209,7 +209,7 @@ class RefreshToken(Resource):
     @auth_ns.response(200, 'Tokens refreshed successfully', refresh_token_success_model)
     @auth_ns.response(401, 'Invalid token', refresh_token_error_model)
     def post(self):
-        """Refresh the access token using a valid refresh token"""
+        """Refresh access token"""
         data = request.get_json()
         
         if 'refresh_token' not in data:
@@ -253,7 +253,7 @@ class Logout(Resource):
     @auth_ns.response(200, 'Logged out successfully', logout_success_model)
     @auth_ns.response(400, 'Missing token', logout_error_model)
     def post(self):
-        """Logout a user by invalidating their session and auth record"""
+        """Logout user"""
         data = request.get_json()
         
         if 'refresh_token' not in data:

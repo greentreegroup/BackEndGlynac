@@ -7,13 +7,25 @@ from flask_restx import Api
 
 # Initialize API
 api = Api(
-    title='Glynac API',
     version='1.0',
-    description='API documentation for Glynac system',
-    doc='/api/docs'
+    title='Glynac API',
+    description='A RESTful API for Glynac application',
+    doc='/docs',
+    authorizations={
+        'Bearer': {
+            'type': 'apiKey',
+            'in': 'header',
+            'name': 'Authorization',
+            'description': 'Type in the *\'Value\'* input box below: **\'Bearer &lt;JWT&gt;\'**, where JWT is the token'
+        }
+    },
+    prefix='/api/v1'
 )
 
-# Create namespaces
+# Define namespaces
 auth_ns = api.namespace('auth', description='Authentication operations')
 user_ns = api.namespace('users', description='User management operations')
-health_ns = api.namespace('health', description='Health check operations') 
+session_ns = api.namespace('sessions', description='Session management operations')
+
+# Export namespaces
+__all__ = ['api', 'auth_ns', 'user_ns', 'session_ns'] 

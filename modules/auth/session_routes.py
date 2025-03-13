@@ -4,12 +4,12 @@ This module provides endpoints for managing user sessions, including viewing,
 monitoring, and terminating sessions with role-based access control.
 """
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import request
 from flask_restx import Resource
 from datetime import datetime
 from ..common.database import db
 from ..common.utils import format_error_response, format_success_response
-from ..common.docs.base import auth_ns
+from ..common.docs.base import session_ns
 from .models import Session, AuthAttempts, FailedLogin
 from .utils.auth import require_auth, get_current_user
 from .docs.models import (
@@ -18,14 +18,12 @@ from .docs.models import (
     session_not_found_model, session_delete_success_model
 )
 
-session_bp = Blueprint('session', __name__)
-
-@auth_ns.route('/sessions')
+@session_ns.route('/')
 class Sessions(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Sessions retrieved successfully', session_list_success_model)
-    @auth_ns.response(401, 'Unauthorized', session_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', session_forbidden_model)
+    @session_ns.doc(security='Bearer')
+    @session_ns.response(200, 'Sessions retrieved successfully', session_list_success_model)
+    @session_ns.response(401, 'Unauthorized', session_unauthorized_model)
+    @session_ns.response(403, 'Forbidden', session_forbidden_model)
     @require_auth(roles=['admin'])
     def get(self):
         """Get all active sessions (Admin only)"""
@@ -42,14 +40,14 @@ class Sessions(Resource):
             } for session in sessions]
         }, 'Sessions retrieved successfully')
 
-@auth_ns.route('/sessions/<string:session_id>')
-@auth_ns.param('session_id', 'The session identifier')
+@session_ns.route('/<string:session_id>')
+@session_ns.param('session_id', 'The session identifier')
 class SessionResource(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Session terminated successfully', session_delete_success_model)
-    @auth_ns.response(401, 'Unauthorized', session_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', session_forbidden_model)
-    @auth_ns.response(404, 'Session not found', session_not_found_model)
+    @session_ns.doc(security='Bearer')
+    @session_ns.response(200, 'Session terminated successfully', session_delete_success_model)
+    @session_ns.response(401, 'Unauthorized', session_unauthorized_model)
+    @session_ns.response(403, 'Forbidden', session_forbidden_model)
+    @session_ns.response(404, 'Session not found', session_not_found_model)
     @require_auth(roles=['admin'])
     def delete(self, session_id):
         """Force logout by terminating a session (Admin only)"""
@@ -65,11 +63,11 @@ class SessionResource(Resource):
             db.session.rollback()
             return format_error_response(f'Failed to terminate session: {str(e)}', 400)
 
-@auth_ns.route('/sessions/me')
+@session_ns.route('/me')
 class MySessionsResource(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Sessions retrieved successfully', session_list_success_model)
-    @auth_ns.response(401, 'Unauthorized', session_unauthorized_model)
+    @session_ns.doc(security='Bearer')
+    @session_ns.response(200, 'Sessions retrieved successfully', session_list_success_model)
+    @session_ns.response(401, 'Unauthorized', session_unauthorized_model)
     @require_auth()
     def get(self):
         """Get current user's active sessions"""
@@ -90,14 +88,14 @@ class MySessionsResource(Resource):
             } for session in sessions]
         }, 'Sessions retrieved successfully')
 
-@auth_ns.route('/sessions/me/<string:session_id>')
-@auth_ns.param('session_id', 'The session identifier')
+@session_ns.route('/me/<string:session_id>')
+@session_ns.param('session_id', 'The session identifier')
 class MySessionResource(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Session terminated successfully', session_delete_success_model)
-    @auth_ns.response(401, 'Unauthorized', session_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', session_forbidden_model)
-    @auth_ns.response(404, 'Session not found', session_not_found_model)
+    @session_ns.doc(security='Bearer')
+    @session_ns.response(200, 'Session terminated successfully', session_delete_success_model)
+    @session_ns.response(401, 'Unauthorized', session_unauthorized_model)
+    @session_ns.response(403, 'Forbidden', session_forbidden_model)
+    @session_ns.response(404, 'Session not found', session_not_found_model)
     @require_auth()
     def delete(self, session_id):
         """Terminate a specific session for the current user"""
@@ -118,12 +116,12 @@ class MySessionResource(Resource):
             db.session.rollback()
             return format_error_response(f'Failed to terminate session: {str(e)}', 400)
 
-@auth_ns.route('/auth-attempts')
+@session_ns.route('/auth-attempts')
 class AuthAttemptsResource(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Auth attempts retrieved successfully')
-    @auth_ns.response(401, 'Unauthorized', session_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', session_forbidden_model)
+    @session_ns.doc(security='Bearer')
+    @session_ns.response(200, 'Auth attempts retrieved successfully')
+    @session_ns.response(401, 'Unauthorized', session_unauthorized_model)
+    @session_ns.response(403, 'Forbidden', session_forbidden_model)
     @require_auth(roles=['admin'])
     def get(self):
         """Get all authentication attempts (Admin only)"""
@@ -141,32 +139,11 @@ class AuthAttemptsResource(Resource):
             } for attempt in attempts]
         }, 'Auth attempts retrieved successfully')
 
-@auth_ns.route('/failed-logins')
-class FailedLoginsResource(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Failed logins retrieved successfully')
-    @auth_ns.response(401, 'Unauthorized', session_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', session_forbidden_model)
-    @require_auth(roles=['admin'])
-    def get(self):
-        """Get all failed login attempts (Admin only)"""
-        failed_logins = FailedLogin.query.all()
-        return format_success_response({
-            'failed_logins': [{
-                'id': str(login.id),
-                'user_id': str(login.user_id),
-                'ip_address': login.ip_address,
-                'user_agent': login.user_agent,
-                'location': login.location,
-                'created_at': login.created_at.isoformat()
-            } for login in failed_logins]
-        }, 'Failed logins retrieved successfully')
-
-@auth_ns.route('/auth-attempts/me')
+@session_ns.route('/auth-attempts/me')
 class MyAuthAttemptsResource(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Auth attempts retrieved successfully')
-    @auth_ns.response(401, 'Unauthorized', session_unauthorized_model)
+    @session_ns.doc(security='Bearer')
+    @session_ns.response(200, 'Auth attempts retrieved successfully')
+    @session_ns.response(401, 'Unauthorized', session_unauthorized_model)
     @require_auth()
     def get(self):
         """Get current user's authentication attempts"""
@@ -183,11 +160,32 @@ class MyAuthAttemptsResource(Resource):
             } for attempt in attempts]
         }, 'Auth attempts retrieved successfully')
 
-@auth_ns.route('/failed-logins/me')
+@session_ns.route('/failed-logins')
+class FailedLoginsResource(Resource):
+    @session_ns.doc(security='Bearer')
+    @session_ns.response(200, 'Failed logins retrieved successfully')
+    @session_ns.response(401, 'Unauthorized', session_unauthorized_model)
+    @session_ns.response(403, 'Forbidden', session_forbidden_model)
+    @require_auth(roles=['admin'])
+    def get(self):
+        """Get all failed login attempts (Admin only)"""
+        failed_logins = FailedLogin.query.all()
+        return format_success_response({
+            'failed_logins': [{
+                'id': str(login.id),
+                'user_id': str(login.user_id),
+                'ip_address': login.ip_address,
+                'user_agent': login.user_agent,
+                'location': login.location,
+                'created_at': login.created_at.isoformat()
+            } for login in failed_logins]
+        }, 'Failed logins retrieved successfully')
+
+@session_ns.route('/failed-logins/me')
 class MyFailedLoginsResource(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Failed logins retrieved successfully')
-    @auth_ns.response(401, 'Unauthorized', session_unauthorized_model)
+    @session_ns.doc(security='Bearer')
+    @session_ns.response(200, 'Failed logins retrieved successfully')
+    @session_ns.response(401, 'Unauthorized', session_unauthorized_model)
     @require_auth()
     def get(self):
         """Get current user's failed login attempts"""

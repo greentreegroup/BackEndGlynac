@@ -1,13 +1,12 @@
 """
-Common documentation package.
-This package provides base API documentation and common models.
+API documentation module initialization.
 """
 
-from .base import api, auth_ns, user_ns, health_ns
+from .base import api, auth_ns, user_ns, session_ns
 
 __all__ = [
     'api',
+    'auth_ns',
     'user_ns',
-    'health_ns',
-    'auth_ns'
+    'session_ns'
 ] 

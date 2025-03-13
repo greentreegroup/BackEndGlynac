@@ -4,31 +4,30 @@ This module provides endpoints for user management, including creating, updating
 and viewing user profiles with role-based access control.
 """
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import request
 from flask_restx import Resource
 from datetime import datetime
 import bcrypt
 from ..common.database import db
 from ..common.utils import format_error_response, format_success_response
-from ..common.docs.base import auth_ns
+from ..common.docs.base import user_ns
 from .models import User
 from .utils.auth import require_auth, get_current_user
 from .utils.validation import validate_user_data
 from .docs.models import (
-    user_create_model, user_update_model ,  user_success_model, user_list_success_model,
+    user_model, user_create_model, user_update_model,
+    user_success_model, user_list_success_model,
     user_validation_error_model, user_not_found_model,
     user_unauthorized_model, user_forbidden_model,
     profile_update_model
 )
 
-user_bp = Blueprint('user', __name__)
-
-@auth_ns.route('/users')
+@user_ns.route('/')
 class Users(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Users retrieved successfully', user_list_success_model)
-    @auth_ns.response(401, 'Unauthorized', user_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', user_forbidden_model)
+    @user_ns.doc(security='Bearer')
+    @user_ns.response(200, 'Users retrieved successfully', user_list_success_model)
+    @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
+    @user_ns.response(403, 'Forbidden', user_forbidden_model)
     @require_auth(roles=['admin'])
     def get(self):
         """Get all users (Admin only)"""
@@ -45,12 +44,12 @@ class Users(Resource):
             } for user in users]
         }, 'Users retrieved successfully')
 
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.expect(user_create_model)
-    @auth_ns.response(201, 'User created successfully', user_success_model)
-    @auth_ns.response(400, 'Validation error', user_validation_error_model)
-    @auth_ns.response(401, 'Unauthorized', user_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', user_forbidden_model)
+    @user_ns.doc(security='Bearer')
+    @user_ns.expect(user_create_model)
+    @user_ns.response(201, 'User created successfully', user_success_model)
+    @user_ns.response(400, 'Validation error', user_validation_error_model)
+    @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
+    @user_ns.response(403, 'Forbidden', user_forbidden_model)
     @require_auth(roles=['admin'])
     def post(self):
         """Create a new user (Admin only)"""
@@ -101,16 +100,16 @@ class Users(Resource):
             db.session.rollback()
             return format_error_response(f'Failed to create user: {str(e)}', 400)
 
-@auth_ns.route('/users/<string:user_id>')
-@auth_ns.param('user_id', 'The user identifier')
+@user_ns.route('/<string:user_id>')
+@user_ns.param('user_id', 'The user identifier')
 class UserResource(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.expect(user_update_model)
-    @auth_ns.response(200, 'User updated successfully', user_success_model)
-    @auth_ns.response(400, 'Validation error', user_validation_error_model)
-    @auth_ns.response(401, 'Unauthorized', user_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', user_forbidden_model)
-    @auth_ns.response(404, 'User not found', user_not_found_model)
+    @user_ns.doc(security='Bearer')
+    @user_ns.expect(user_update_model)
+    @user_ns.response(200, 'User updated successfully', user_success_model)
+    @user_ns.response(400, 'Validation error', user_validation_error_model)
+    @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
+    @user_ns.response(403, 'Forbidden', user_forbidden_model)
+    @user_ns.response(404, 'User not found', user_not_found_model)
     @require_auth(roles=['admin'])
     def put(self, user_id):
         """Update a user (Admin only)"""
@@ -166,11 +165,11 @@ class UserResource(Resource):
             db.session.rollback()
             return format_error_response(f'Failed to update user: {str(e)}', 400)
 
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'User deleted successfully')
-    @auth_ns.response(401, 'Unauthorized', user_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', user_forbidden_model)
-    @auth_ns.response(404, 'User not found', user_not_found_model)
+    @user_ns.doc(security='Bearer')
+    @user_ns.response(200, 'User deleted successfully')
+    @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
+    @user_ns.response(403, 'Forbidden', user_forbidden_model)
+    @user_ns.response(404, 'User not found', user_not_found_model)
     @require_auth(roles=['admin'])
     def delete(self, user_id):
         """Soft delete a user (Admin only)"""
@@ -187,14 +186,14 @@ class UserResource(Resource):
             db.session.rollback()
             return format_error_response(f'Failed to delete user: {str(e)}', 400)
 
-@auth_ns.route('/users/<string:user_id>/restore')
-@auth_ns.param('user_id', 'The user identifier')
+@user_ns.route('/<string:user_id>/restore')
+@user_ns.param('user_id', 'The user identifier')
 class RestoreUser(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'User restored successfully', user_success_model)
-    @auth_ns.response(401, 'Unauthorized', user_unauthorized_model)
-    @auth_ns.response(403, 'Forbidden', user_forbidden_model)
-    @auth_ns.response(404, 'User not found', user_not_found_model)
+    @user_ns.doc(security='Bearer')
+    @user_ns.response(200, 'User restored successfully', user_success_model)
+    @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
+    @user_ns.response(403, 'Forbidden', user_forbidden_model)
+    @user_ns.response(404, 'User not found', user_not_found_model)
     @require_auth(roles=['admin'])
     def post(self, user_id):
         """Restore a soft-deleted user (Admin only)"""
@@ -223,11 +222,11 @@ class RestoreUser(Resource):
             db.session.rollback()
             return format_error_response(f'Failed to restore user: {str(e)}', 400)
 
-@auth_ns.route('/users/me')
+@user_ns.route('/me')
 class UserProfile(Resource):
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.response(200, 'Profile retrieved successfully', user_success_model)
-    @auth_ns.response(401, 'Unauthorized', user_unauthorized_model)
+    @user_ns.doc(security='Bearer')
+    @user_ns.response(200, 'Profile retrieved successfully', user_success_model)
+    @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
     @require_auth()
     def get(self):
         """Get current user's profile"""
@@ -244,12 +243,12 @@ class UserProfile(Resource):
             }
         }, 'Profile retrieved successfully')
 
-    @auth_ns.doc(security='Bearer')
-    @auth_ns.expect(profile_update_model)
-    @auth_ns.response(200, 'Profile updated successfully', user_success_model)
-    @auth_ns.response(400, 'Validation error', user_validation_error_model)
-    @auth_ns.response(401, 'Unauthorized', user_unauthorized_model)
-    @auth_ns.response(403, 'Invalid current password', user_forbidden_model)
+    @user_ns.doc(security='Bearer')
+    @user_ns.expect(profile_update_model)
+    @user_ns.response(200, 'Profile updated successfully', user_success_model)
+    @user_ns.response(400, 'Validation error', user_validation_error_model)
+    @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
+    @user_ns.response(403, 'Invalid current password', user_forbidden_model)
     @require_auth()
     def put(self):
         """Update current user's profile"""
