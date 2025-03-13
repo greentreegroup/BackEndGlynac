@@ -5,6 +5,7 @@ from flask_migrate import Migrate
 from modules.common.config import Config
 from modules.common.database import db
 from modules.auth import auth_bp
+from modules.auth.seeds import run_seeds
 from modules.common.docs import api
 from datetime import datetime, UTC
 
@@ -33,9 +34,10 @@ def create_app(config_class=Config):
             'timestamp': datetime.now(UTC).isoformat()
         }), 200
     
-    # Create database tables
+    # Create database tables and seed initial data
     with app.app_context():
         db.create_all()
+        run_seeds()  # Run seeds after tables are created
     
     return app
 

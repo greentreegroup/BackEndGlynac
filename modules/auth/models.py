@@ -2,6 +2,11 @@ from datetime import datetime
 import uuid
 from ..common.database import db
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INET
+from enum import Enum
+
+class UserRole(str, Enum):
+    ADMIN = 'admin'
+    CLIENT = 'client'
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -11,7 +16,7 @@ class User(db.Model):
     encrypted_password = db.Column(db.String(255))
     full_name = db.Column(db.String(255))
     phone = db.Column(db.Text)
-    role = db.Column(db.Text)
+    role = db.Column(db.Enum(UserRole), default=UserRole.CLIENT)
     email_confirmed_at = db.Column(db.DateTime)
     phone_confirmed_at = db.Column(db.DateTime)
     last_sign_in_at = db.Column(db.DateTime)
