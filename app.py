@@ -4,7 +4,7 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from modules.common.config import Config
 from modules.common.database import db
-from modules.auth import auth_bp
+from modules.auth import init_app as init_auth
 from modules.auth.seeds import run_seeds
 from modules.common.docs import api
 from datetime import datetime, UTC
@@ -22,8 +22,8 @@ def create_app(config_class=Config):
     # Initialize API documentation
     api.init_app(app)
     
-    # Register blueprints
-    app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
+    # Initialize auth module
+    init_auth(app)
     
     # Health check endpoint
     @app.route('/ping', methods=['GET'])
