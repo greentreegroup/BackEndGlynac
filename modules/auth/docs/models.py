@@ -6,7 +6,7 @@ This module contains all the request/response models specific to authentication.
 from flask_restx import fields, Api
 from ...common.docs.base import api
 
-# Auth-specific models
+# Requests models
 login_model = api.model('Login', {
     'email': fields.String(
         required=True,
