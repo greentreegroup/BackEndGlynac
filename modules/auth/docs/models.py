@@ -11,13 +11,13 @@ login_model = api.model('Login', {
     'email': fields.String(
         required=True,
         description='User email address',
-        example='user@example.com',
+        example='client1@glynac.com',
         pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ),
     'password': fields.String(
         required=True,
         description='User password (min 8 characters)',
-        example='SecureP@ss123',
+        example='Client@123',
         min_length=8
     )
 })
@@ -97,16 +97,6 @@ token_model = api.model('Token', {
         required=True,
         description='JWT refresh token for obtaining new access tokens',
         example='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
-    ),
-    'expires_in': fields.Integer(
-        required=True,
-        description='Access token expiration time in seconds',
-        example=3600
-    ),
-    'token_type': fields.String(
-        required=True,
-        description='Token type (always "Bearer")',
-        example='Bearer'
     )
 })
 
@@ -542,6 +532,51 @@ user_success_model = api.model('UserSuccess', {
     )
 })
 
+user_retrieval_success_model = api.model('UserRetrievalSuccess', {
+    'message': fields.String(
+        required=True,
+        description='Success message',
+        example='Profile retrieved successfully'
+    ),
+    'data': fields.Nested(
+        api.model('UserData', {
+            'user': fields.Nested(
+                api.model('UserDetails', {
+                    'id': fields.String(
+                        required=True,
+                        description='User identifier',
+                        example='550e8400-e29b-41d4-a716-446655440000'
+                    ),
+                    'email': fields.String(
+                        required=True,
+                        description='User email address',
+                        example='user@example.com'
+                    ),
+                    'full_name': fields.String(
+                        required=True,
+                        description='User full name',
+                        example='John Doe'
+                    ),
+                    'phone': fields.String(
+                        description='User phone number',
+                        example='+1234567890'
+                    ),
+                    'role': fields.String(
+                        required=True,
+                        description='User role',
+                        example='user',
+                        enum=['user', 'admin', 'moderator']
+                    ),
+                    'updated_at': fields.DateTime(
+                        description='Last update timestamp',
+                        example='2024-03-13T10:00:00Z'
+                    )
+                })
+            )
+        })
+    )
+})
+
 # User validation error model
 user_validation_error_model = api.model('UserValidationError', {
     'error': fields.String(
@@ -557,6 +592,27 @@ user_validation_error_model = api.model('UserValidationError', {
             'full_name': 'Full name must be between 2 and 100 characters',
             'phone': 'Invalid phone number format',
             'role': 'Invalid role. Must be one of: user, admin, moderator'
+        }
+    ),
+    'missing_fields': fields.List(
+        fields.String,
+        description='List of required fields that are missing',
+        example=['email', 'full_name']
+    )
+})
+
+user_update_validation_error_model = api.model('UserValidationError', {
+    'error': fields.String(
+        required=True,
+        description='Main error message',
+        example='Validation failed'
+    ),
+    'details': fields.Raw(
+        required=True,
+        description='Field-specific validation errors',
+        example={
+            'full_name': 'Full name must be between 2 and 100 characters',
+            'phone': 'Invalid phone number format',
         }
     ),
     'missing_fields': fields.List(
@@ -617,6 +673,12 @@ user_create_model = api.model('UserCreate', {
 })
 
 user_update_model = api.model('UserUpdate', {
+    'email': fields.String(
+        required=True,
+        description='User email address',
+        example='user@example.com',
+        pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ),
     'full_name': fields.String(
         required=False,
         description='User full name',

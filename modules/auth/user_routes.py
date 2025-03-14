@@ -11,14 +11,15 @@ import bcrypt
 from ..common.database import db
 from ..common.utils import format_error_response, format_success_response
 from ..common.docs.base import user_ns
-from .models import User
+from .models import User, Session, Auth  # Add these imports
 from .utils.auth import require_auth, get_current_user
 from .utils.validation import validate_user_data
 from .docs.models import (
     user_model, user_create_model, user_update_model,
+    user_retrieval_success_model,
     user_success_model, user_list_success_model,
-    user_validation_error_model, user_not_found_model,
-    user_unauthorized_model, user_forbidden_model,
+    user_update_validation_error_model, user_validation_error_model,
+    user_not_found_model,user_unauthorized_model, user_forbidden_model,
     profile_update_model
 )
 
@@ -26,12 +27,12 @@ from .docs.models import (
 class Users(Resource):
     @user_ns.doc(security='Bearer')
     @user_ns.response(200, 'Users retrieved successfully', user_list_success_model)
-    @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
+    @user_ns.response(401, 'Unauthorized', user_unauthorized_model) 
     @user_ns.response(403, 'Forbidden', user_forbidden_model)
     @require_auth(roles=['admin'])
     def get(self):
         """Get all users (Admin only)"""
-        users = User.query.filter_by(deleted_at=None).all()
+        users = User.query.filter_by().all()
         return format_success_response({
             'users': [{
                 'id': str(user.id),
@@ -39,6 +40,7 @@ class Users(Resource):
                 'full_name': user.full_name,
                 'phone': user.phone,
                 'role': user.role,
+                'is_deleted': user.is_deleted,
                 'created_at': user.created_at.isoformat() if user.created_at else None,
                 'last_sign_in_at': user.last_sign_in_at.isoformat() if user.last_sign_in_at else None
             } for user in users]
@@ -61,12 +63,15 @@ class Users(Resource):
             return format_error_response({
                 'error': 'Validation failed',
                 'details': field_errors,
-                'missing_fields': missing_fields
+                'missing_fields': missing_fields,
+                'error_type': 'validation'
             }, 400)
         
         # Check if email already exists
         if User.query.filter_by(email=data['email']).first():
-            return format_error_response('Email already registered', 409)
+            return format_error_response({
+                'error': 'Email already registered',
+            }, 409)
         
         # Hash password
         salt = bcrypt.gensalt()
@@ -115,7 +120,7 @@ class UserResource(Resource):
         """Update a user (Admin only)"""
         user = User.query.get(user_id)
         if not user:
-            return format_error_response('User not found', 404)
+            return format_error_response({"error": "User not found", "errorType": "not_found"}, 404)
         
         data = request.get_json()
         
@@ -131,13 +136,12 @@ class UserResource(Resource):
         if 'email' in data:
             existing_user = User.query.filter_by(email=data['email']).first()
             if existing_user and existing_user.id != user.id:
-                return format_error_response('Email already registered', 409)
+                return format_error_response({
+                'error': 'Email already registered',
+                'error_type': "conflict" 
+            }, 409)
             user.email = data['email']
         
-        if 'password' in data:
-            salt = bcrypt.gensalt()
-            hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), salt)
-            user.encrypted_password = hashed_password.decode('utf-8')
         
         if 'full_name' in data:
             user.full_name = data['full_name']
@@ -177,7 +181,7 @@ class UserResource(Resource):
         if not user:
             return format_error_response('User not found', 404)
         
-        user.deleted_at = datetime.utcnow()
+        user.is_deleted = True
         
         try:
             db.session.commit()
@@ -204,7 +208,7 @@ class RestoreUser(Resource):
         if user.deleted_at is None:
             return format_error_response('User is not deleted', 400)
         
-        user.deleted_at = None
+        user.is_deleted = False
         
         try:
             db.session.commit()
@@ -225,8 +229,9 @@ class RestoreUser(Resource):
 @user_ns.route('/me')
 class UserProfile(Resource):
     @user_ns.doc(security='Bearer')
-    @user_ns.response(200, 'Profile retrieved successfully', user_success_model)
+    @user_ns.response(200, 'Profile retrieved successfully', user_retrieval_success_model)
     @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
+    @user_ns.response(404, 'User not found', user_not_found_model)
     @require_auth()
     def get(self):
         """Get current user's profile"""
@@ -246,9 +251,8 @@ class UserProfile(Resource):
     @user_ns.doc(security='Bearer')
     @user_ns.expect(profile_update_model)
     @user_ns.response(200, 'Profile updated successfully', user_success_model)
-    @user_ns.response(400, 'Validation error', user_validation_error_model)
+    @user_ns.response(400, 'Validation error', user_update_validation_error_model)
     @user_ns.response(401, 'Unauthorized', user_unauthorized_model)
-    @user_ns.response(403, 'Invalid current password', user_forbidden_model)
     @require_auth()
     def put(self):
         """Update current user's profile"""
@@ -286,3 +290,5 @@ class UserProfile(Resource):
         except Exception as e:
             db.session.rollback()
             return format_error_response(f'Failed to update profile: {str(e)}', 400)
+
+

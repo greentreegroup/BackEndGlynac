@@ -21,12 +21,13 @@ from .docs.models import (
     sessions_success_model, session_delete_success_model,
     session_unauthorized_model, session_not_found_model,
 )
-from .models import User, Auth, AuthAttempts, FailedLogin, Session
+from .models import User, Auth, AuthAttempts, FailedLogin, Session  as UserSession  # Ensure Session is imported
 from .helpers import (
     create_session, create_auth_record, record_failed_login,
     reset_auth_attempts, update_session_tokens, invalidate_session,
     get_active_sessions, revoke_all_sessions_except_current, is_ip_locked_out
 )
+from .utils.auth import require_auth , get_current_user
 from .utils.validation import validate_register_data, validate_login_data
 
 # Create Blueprint for auth routes
@@ -262,40 +263,32 @@ class Logout(Resource):
         # Find and invalidate the auth record
         auth = Auth.query.filter_by(refresh_token=data['refresh_token']).first()
         if auth:
-            db.session.delete(auth)
+            auth.invalidated = True
         
         # Find and invalidate the session
-        session = Session.query.filter_by(refresh_token=data['refresh_token']).first()
+        session = UserSession.query.filter_by(refresh_token=data['refresh_token']).first()
         if session:
-            invalidate_session(session)
+            session.invalidated = True
+            session.invalidated_at = datetime.utcnow()
         
-        db.session.commit()
-        
-        return format_success_response(None, 'Logged out successfully')
+        try:
+            db.session.commit()
+            return format_success_response(None, 'Logged out successfully')
+        except Exception as e:
+            db.session.rollback()
+            return format_error_response(f'Failed to logout: {str(e)}', 400)
 
 @auth_ns.route('/sessions')
 class Sessions(Resource):
     @auth_ns.doc('get_sessions', security='Bearer')
     @auth_ns.response(200, 'Sessions retrieved successfully', sessions_success_model)
-    @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model )
+    @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model)
+    @require_auth()
     def get(self):
         """Get all active sessions for the current user"""
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return format_error_response({
-                'error': 'Missing or invalid authorization header',
-                'error_type': 'unauthorized',
-            }, 401)
-        
-        access_token = auth_header.split(' ')[1]
-        payload = verify_token(access_token)
-        if not payload:
-            return format_error_response({
-                'error': "Session has Expired",
-                'error_type': 'expired',
-            }, 401)
-        
-        sessions = get_active_sessions(payload['user_id'])
+        user = get_current_user()  # Use the helper function
+
+        sessions = get_active_sessions(user.id)  # Fetch sessions for the user
         
         return format_success_response({
             'sessions': [{
@@ -308,6 +301,7 @@ class Sessions(Resource):
             } for session in sessions]
         }, 'Sessions retrieved successfully')
 
+
 @auth_ns.route('/sessions/<session_id>')
 @auth_ns.param('session_id', 'The session identifier')
 class Session(Resource):
@@ -315,45 +309,36 @@ class Session(Resource):
     @auth_ns.response(200, 'Session deleted successfully', session_delete_success_model)
     @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model)
     @auth_ns.response(404, 'Session not found', session_not_found_model)
+    @require_auth()
     def delete(self, session_id):
         """Delete a specific session"""
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return format_error_response({
-                'error': 'Missing or invalid authorization header',
-                'error_type': 'unauthorized',
-            }, 401)
-        
-        access_token = auth_header.split(' ')[1]
-        payload = verify_token(access_token)
-        if not payload:
-            return format_error_response({
-                'error': 'Session has expired',
-                'error_type': 'expired',
-            }, 401)
-        
+
+        user = get_current_user()  # Use helper function from the decorator
+
         session = Session.query.get(session_id)
         if not session:
             return format_error_response({
                 'error': 'Session not found',
                 'error_type': 'not_found',
             }, 404)
-        
-        if session.user_id != payload['user_id']:
+
+        if session.user_id != user.id:
             return format_error_response({
                 'error': 'You do not have permission to perform this action',
                 'error_type': 'forbidden',
             }, 403)
-        
+
         invalidate_session(session)
-        
-        return format_success_response(None, 'Session deleted successfully')
+
+        return format_success_response(None, 'Session revoked successfully')
+
 
 @auth_ns.route('/sessions/revoke-all')
 class RevokeAllSessions(Resource):
     @auth_ns.doc('revoke_all_sessions', security='Bearer')
     @auth_ns.response(200, 'All other sessions deleted successfully', session_delete_success_model)
     @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model)
+    @require_auth()
     def post(self):
         """Delete all sessions for the current user except the current one"""
         auth_header = request.headers.get('Authorization')
@@ -380,24 +365,12 @@ class UserProfile(Resource):
     @auth_ns.doc('get_user_profile', security='Bearer')
     @auth_ns.response(200, 'User profile retrieved successfully', user_model)
     @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model)
+    @require_auth()
     def get(self):
         """Get the current user's profile"""
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return format_error_response({
-                'error': 'Missing or invalid authorization header',
-                'error_type': 'unauthorized',
-            }, 401)
         
-        access_token = auth_header.split(' ')[1]
-        payload = verify_token(access_token)
-        if not payload:
-            return format_error_response({
-                'error': "Session has Expired",
-                'error_type': 'expired',
-            }, 401)
+        user = get_current_user()  # Use helper function from the decorator
         
-        user = User.query.get(payload['user_id'])
         if not user:
             return format_error_response({
                 'error': 'User not found',
@@ -413,30 +386,19 @@ class UserProfile(Resource):
             }
         }, 'User profile retrieved successfully')
 
+
 @auth_ns.route('/users/me', methods=['PUT'])
 class UpdateUserProfile(Resource):
     @auth_ns.doc('update_user_profile', security='Bearer')
     @auth_ns.response(200, 'User profile updated successfully', user_model)
     @auth_ns.response(400, 'Validation error', register_validation_error_model)
     @auth_ns.response(401, 'Unauthorized/Expired', session_unauthorized_model)
+    @require_auth()
     def put(self):
         """Update the current user's profile"""
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return format_error_response({
-                'error': 'Missing or invalid authorization header',
-                'error_type': 'unauthorized',
-            }, 401)
         
-        access_token = auth_header.split(' ')[1]
-        payload = verify_token(access_token)
-        if not payload:
-            return format_error_response({
-                'error': 'Session has expired',
-                'error_type': 'expired',
-            }, 401)
+        user = get_current_user()  # Use helper function from the decorator
         
-        user = User.query.get(payload['user_id'])
         if not user:
             return format_error_response({
                 'error': 'User not found',
@@ -469,4 +431,5 @@ class UpdateUserProfile(Resource):
                 'missing_fields': [],
                 'error_type': 'server'
             }, 500)
+
 

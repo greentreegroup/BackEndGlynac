@@ -70,7 +70,7 @@ def create_auth_record(user_id, provider, access_token, refresh_token, provider_
 
 def is_ip_locked_out(ip_address=None, user_id=None):
     """
-    Check if an IP address or user ID combination is locked out based on failed login attempts.
+    Check if an IP address + user ID combination is locked out based on failed login attempts.
     
     Args:
         ip_address: Optional IP address to check (defaults to request.remote_addr)
@@ -84,8 +84,15 @@ def is_ip_locked_out(ip_address=None, user_id=None):
     if ip_address is None:
         ip_address = request.remote_addr
     
-    # Check IP-based lockout
-    auth_attempt = AuthAttempts.query.filter_by(ip_address=ip_address).first()
+    if not user_id:
+        return False, None
+    
+    # Check IP + user combination lockout
+    auth_attempt = AuthAttempts.query.filter_by(
+        ip_address=ip_address,
+        user_id=user_id
+    ).first()
+    
     if auth_attempt and auth_attempt.attempt_count >= current_app.config['MAX_LOGIN_ATTEMPTS']:
         # Calculate remaining lockout time
         last_attempt = auth_attempt.last_attempt_at
@@ -99,27 +106,12 @@ def is_ip_locked_out(ip_address=None, user_id=None):
             auth_attempt.attempt_count = 0
             db.session.commit()
     
-    # Check user ID-based lockout if user_id is provided
-    if user_id:
-        user_attempt = AuthAttempts.query.filter_by(user_id=user_id).first()
-        if user_attempt and user_attempt.attempt_count >= current_app.config['MAX_LOGIN_ATTEMPTS']:
-            last_attempt = user_attempt.last_attempt_at
-            lockout_end = last_attempt + timedelta(minutes=current_app.config['LOGIN_TIMEOUT_MINUTES'])
-            remaining = (lockout_end - datetime.utcnow()).total_seconds() / 60
-            
-            if remaining > 0:
-                return True, f"{int(remaining)} minutes"
-            else:
-                # Reset attempts if lockout period has expired
-                user_attempt.attempt_count = 0
-                db.session.commit()
-    
     return False, None
 
 def record_failed_login(user_id=None, ip_address=None, user_agent=None, location=None):
     """
     Record a failed login attempt and update the attempt counter.
-    If the number of failed attempts exceeds MAX_LOGIN_ATTEMPTS, the IP/user_id combination will be locked out.
+    If the number of failed attempts exceeds MAX_LOGIN_ATTEMPTS, the IP + user_id combination will be locked out.
     
     Args:
         user_id: Optional ID of the user who failed to login
@@ -149,41 +141,35 @@ def record_failed_login(user_id=None, ip_address=None, user_agent=None, location
     )
     db.session.add(failed_login)
     
-    # Update or create IP-based auth attempts counter
-    ip_attempt = AuthAttempts.query.filter_by(ip_address=ip_address).first()
-    if ip_attempt:
-        ip_attempt.attempt_count += 1
-        ip_attempt.last_attempt_at = datetime.utcnow()
-    else:
-        ip_attempt = AuthAttempts(
-            user_id=user_id,
-            ip_address=ip_address,
-            attempt_count=1
-        )
-        db.session.add(ip_attempt)
-    
-    # Update or create user ID-based auth attempts counter if user_id is provided
     if user_id:
-        user_attempt = AuthAttempts.query.filter_by(user_id=user_id).first()
-        if user_attempt:
-            user_attempt.attempt_count += 1
-            user_attempt.last_attempt_at = datetime.utcnow()
+        # Update or create IP + user combination auth attempts counter
+        auth_attempt = AuthAttempts.query.filter_by(
+            ip_address=ip_address,
+            user_id=user_id
+        ).first()
+        
+        if auth_attempt:
+            auth_attempt.attempt_count += 1
+            auth_attempt.last_attempt_at = datetime.utcnow()
         else:
-            user_attempt = AuthAttempts(
+            auth_attempt = AuthAttempts(
                 user_id=user_id,
+                ip_address=ip_address,
                 attempt_count=1
             )
-            db.session.add(user_attempt)
+            db.session.add(auth_attempt)
+        
+        db.session.commit()
+        
+        # Check if IP + user combination is now locked out
+        is_locked, remaining_time = is_ip_locked_out(ip_address, user_id)
+        return failed_login, is_locked, remaining_time
     
-    db.session.commit()
-    
-    # Check if IP/user_id combination is now locked out
-    is_locked, remaining_time = is_ip_locked_out(ip_address, user_id)
-    return failed_login, is_locked, remaining_time
+    return failed_login, False, None
 
 def reset_auth_attempts(ip_address=None, user_id=None):
     """
-    Reset the failed login attempts counter for an IP address and/or user ID.
+    Reset the failed login attempts counter for an IP + user ID combination.
     
     Args:
         ip_address: Optional IP address to reset attempts for (defaults to request.remote_addr)
@@ -192,17 +178,15 @@ def reset_auth_attempts(ip_address=None, user_id=None):
     if ip_address is None:
         ip_address = request.remote_addr
     
-    # Reset IP-based attempts
-    ip_attempt = AuthAttempts.query.filter_by(ip_address=ip_address).first()
-    if ip_attempt:
-        ip_attempt.attempt_count = 0
-        db.session.commit()
-    
-    # Reset user ID-based attempts if user_id is provided
     if user_id:
-        user_attempt = AuthAttempts.query.filter_by(user_id=user_id).first()
-        if user_attempt:
-            user_attempt.attempt_count = 0
+        # Reset IP + user combination attempts
+        auth_attempt = AuthAttempts.query.filter_by(
+            ip_address=ip_address,
+            user_id=user_id
+        ).first()
+        
+        if auth_attempt:
+            auth_attempt.attempt_count = 0
             db.session.commit()
 
 def update_session_tokens(session, access_token, refresh_token):
@@ -222,13 +206,20 @@ def update_session_tokens(session, access_token, refresh_token):
 
 def invalidate_session(session):
     """
-    Mark a session as invalidated.
+    Mark a session and its associated auth token as invalidated.
     
     Args:
         session: The session object to invalidate
     """
     session.invalidated = True
     session.invalidated_at = datetime.utcnow()
+
+    # Invalidate associated Auth token
+    auth = Auth.query.filter_by(user_id=session.user_id, access_token=session.access_token).first()
+    if auth:
+        auth.invalidated = True
+        auth.invalidated_at = datetime.utcnow()
+
     db.session.commit()
 
 def get_active_sessions(user_id):

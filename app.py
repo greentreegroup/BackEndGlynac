@@ -14,6 +14,14 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
     
+    # Configure SQLAlchemy connection pooling
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_size': 10,
+        'max_overflow': 20,
+        'pool_timeout': 30,
+        'pool_recycle': 1800
+    }
+    
     # Initialize extensions
     db.init_app(app)
     jwt = JWTManager(app)
@@ -84,4 +92,4 @@ def create_app(config_class=Config):
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True) 
+    app.run(debug=True)
